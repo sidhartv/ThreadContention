@@ -84,7 +84,7 @@ no_lock_id = 0
 next_object_id = 1
 object_ids = dict()
 
-interval_size_ns = 1000
+interval_size_ns = 1000 # how to adjust and round the raw timestamps
 
 def get_object_id(addr):
     global next_object_id
@@ -99,12 +99,13 @@ def insert_nops(out_fp, prev_time, next_time):
     for t in range(prev_time + 1, next_time):
         out_fp.write("%d 0 0 0\n" % (t))
 
-
 def parse_file(filepath, outpath):
+    global object_ids
+
     filename = filepath.split('/')[-1]
     file_prefix = filename.split(".")[0] + "_" + filename.split(".")[1]
     file_type = filename.split(".")[2]
-    out_filepath = os.path.join(outpath, file_prefix + "_pn." + file_type)
+    out_filepath = os.path.join(outpath, file_prefix + "_p." + file_type)
     print out_filepath
 
     prev_time = 0
@@ -121,7 +122,8 @@ def parse_file(filepath, outpath):
                 object_id = get_object_id(tokens[3])
                 event_type = tokens[4]
 
-                insert_nops(out_fp, prev_time, thread_time_us)
+                # only comment in if you want to add nops 
+                # insert_nops(out_fp, prev_time, thread_time_us)
 
                 outline = "%d %s %d %s\n" % (thread_time_us, object_type, 
                     object_id, event_type)
@@ -130,7 +132,8 @@ def parse_file(filepath, outpath):
 
                 prev_time = thread_time_us
 
-
+            # record number of locks in thread log
+            out_fp.write(str(len(object_ids)))
 
 
 def parse_traces(path, outpath):
@@ -146,7 +149,8 @@ def parse_traces(path, outpath):
         # exit()
 
 if __name__ == '__main__':
-    parse_traces(os.getcwd() + "/tf-mnist-threads",
-        os.getcwd() + "/tf-mnist-threads/processed")
+    inpath = os.path.dirname(os.getcwd()) + "/tf-mnist-threads"
+    outpath = os.path.dirname(os.getcwd()) + "/tf-mnist-threads/processed"
+    parse_traces(inpath, outpath)
 
-   
+        
