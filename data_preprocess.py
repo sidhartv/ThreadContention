@@ -84,7 +84,7 @@ no_lock_id = 0
 next_object_id = 1
 object_ids = dict()
 
-interval_size_ns = 100000 # how to adjust and round the raw timestamps
+interval_size_ns = 1000 # how to adjust and round the raw timestamps
 
 def get_object_id(addr):
     global next_object_id

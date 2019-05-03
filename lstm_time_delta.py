@@ -10,7 +10,7 @@ import numpy as np
 model_params = \
     {"input_size": 1,
      "output_size": 1,
-     "hidden_size": 1,
+     "hidden_size": 10,
      "num_layers": 1,
      "batch_size": 1
     }
@@ -48,10 +48,14 @@ class LSTM(nn.Module):
         # Can pass on the entirety of lstm_out to the next layer if it is a seq2seq prediction
         linear_out = self.linear(lstm_out[-1].view(self.batch_size, -1))
 
-        return linear_out
+        return linear_out.view(1)
 
 def parse_line(line):
-    tokens = first_line.strip().split(" ")
+    tokens = line.strip().split(" ")
+
+    if len(tokens) == 1:
+        return -1, -1, -1
+
     thread_time = int(tokens[0])
     lock_id = int(tokens[2])
     event_type = int(tokens[3])
@@ -59,35 +63,35 @@ def parse_line(line):
     return thread_time, lock_id, event_type
 
 
-def merge_same_time_data(fp):
-    # target = np.zeros((num_locks, num_actions))
+# def merge_same_time_data(fp):
+#     # target = np.zeros((num_locks, num_actions))
     
-    first_line_tokens = first_line.strip().split(" ")
+#     first_line_tokens = first_line.strip().split(" ")
 
-    thread_time = int(first_line_tokens[0])
-    lock_id = int(first_line_tokens[2])-1
-    event_type = int(first_line_tokens[3])-1
+#     thread_time = int(first_line_tokens[0])
+#     lock_id = int(first_line_tokens[2])-1
+#     event_type = int(first_line_tokens[3])-1
 
-    # loop until next line has different timestamp
-    while True:
-        next_line = fp.readline()
-        tokens = next_line.strip().split(" ")
-        # handle case that we are at end of trace (num locks line)
-        if len(tokens) == 1:
-            return thread_time, target, None
+#     # loop until next line has different timestamp
+#     while True:
+#         next_line = fp.readline()
+#         tokens = next_line.strip().split(" ")
+#         # handle case that we are at end of trace (num locks line)
+#         if len(tokens) == 1:
+#             return thread_time, target, None
 
-        cur_time = int(tokens[0])
-        # if next line has same timestamp, update target matrix and continue
-        if cur_time == thread_time:
-            # update target matrix
-            lock_id = int(tokens[2])-1
-            event_type = int(tokens[3])-1
-        else:
-            break
+#         cur_time = int(tokens[0])
+#         # if next line has same timestamp, update target matrix and continue
+#         if cur_time == thread_time:
+#             # update target matrix
+#             lock_id = int(tokens[2])-1
+#             event_type = int(tokens[3])-1
+#         else:
+#             break
 
-    # since we've already read the next line, we need to return it
-    # so that next call to function can process it
-    return thread_time, next_line
+#     # since we've already read the next line, we need to return it
+#     # so that next call to function can process it
+#     return thread_time, next_line
 
 
 
@@ -96,7 +100,7 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01):
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(lstm.parameters(), lr)
     cur_time = 0
-    old delta = 0
+    old_delta = 0
     new_delta = 0
 
     with open(log_file, "r") as fp:
@@ -107,15 +111,22 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01):
                 if old_delta == -1:
                     # first time
                     old_delta = thread_time
+                    print old_delta
                 else:
                     # use delta between last two events to predict next delta
                     pred = model(torch.Tensor([old_delta]))
+                    print type(pred)
+
                     # calculate real delta between current and prev events
                     new_delta = thread_time - cur_time
                     
-                    loss = loss_fn(pred, new_delta)
+                    loss = loss_fn(pred, torch.Tensor([new_delta]))
+                    print cur_time, thread_time, old_delta, new_delta, pred, loss.item()
+
+                    # loss.backward(retain_graph=True)
                     loss.backward(retain_graph=True)
                     optimizer.step()
+
 
                     old_delta = new_delta
 
@@ -154,11 +165,12 @@ if __name__ == '__main__':
     args = parse_args()
     log_file = args.log_file
     lock_id = args.lock_id
+    event_type = args.event_type
     lr = args.lr
     num_locks = get_model_dimensions(log_file)
     if lock_id <= 0 or lock_id > num_locks:
         print "Invalid lock ID"
-        return
+        exit()
 
     input_size = model_params["input_size"]
     output_size = model_params["output_size"]
