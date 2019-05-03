@@ -9,7 +9,7 @@ import numpy as np
 
 model_params = \
     {"input_size": 1,
-     "num_actions": 16,
+     "num_actions": 15,
      "hidden_size": 1,
      "num_layers": 1,
      "batch_size": 1
@@ -46,7 +46,7 @@ class LSTM(nn.Module):
         # shape of lstm_out: [input_size, batch_size, hidden_dim]
         # shape of self.hidden: (a, b), where a and b both 
         # have shape (num_layers, batch_size, hidden_dim).
-        lstm_out, self.hidden = self.lstm(input.view(len(inputs), self.batch_size, -1))
+        lstm_out, self.hidden = self.lstm(inputs.view(len(inputs), self.batch_size, -1))
         
         # Only take the output from the final timetep
         # Can pass on the entirety of lstm_out to the next layer if it is a seq2seq prediction
@@ -54,16 +54,16 @@ class LSTM(nn.Module):
         y_pred = self.sigmoid(linear_out[-1].view(self.batch_size, -1))
 
         # TODO: verify correct dimensions
-        return y_pred.view(num_locks, num_actions,-1)
+        return y_pred.view(num_locks, num_actions)
 
 
-def merge_same_time_data(fp, first_line):
-    target = np.zeros(num_locks, num_actions)
+def merge_same_time_data(fp, first_line, num_locks, num_actions):
+    target = np.zeros((num_locks, num_actions))
     
     first_line_tokens = first_line.strip().split(" ")
     thread_time = int(first_line_tokens[0])
-    object_id = int(first_line_tokens[2])
-    event_type = int(first_line_tokens[3])
+    object_id = int(first_line_tokens[2])-1
+    event_type = int(first_line_tokens[3])-1
     target[object_id][event_type] = 1
 
     # loop until next line has different timestamp
@@ -78,29 +78,54 @@ def merge_same_time_data(fp, first_line):
         # if next line has same timestamp, update target matrix and continue
         if cur_time == thread_time:
             # update target matrix
-            object_id = int(tokens[2])
-            event_type = int(tokens[3])
+            object_id = int(tokens[2])-1
+            event_type = int(tokens[3])-1
             target[object_id][event_type] = 1
         else:
             break
 
     # since we've already read the next line, we need to return it
     # so that next call to function can process it
-    return thread_time, target, next_line
+    return thread_time, torch.from_numpy(target).float(), next_line
 
 
-def train(lstm, lr=0.1, log_file):
-    loss_fn = nn.CrossEntropyLoss()
-    optim = optim.Adam(lstm.parameters(), lr)
+def train(lstm, log_file, lr=0.1):
+    loss_fn = nn.MSELoss()
+    optimizer = optim.Adam(lstm.parameters(), lr)
+    cur_time = 1
+
+    num_locks = lstm.num_locks
+    num_actions = lstm.num_actions
+
+    nop_target = torch.zeros(num_locks, num_actions)
     with open(log_file, "r") as fp:
         next_line = fp.readline()
         # loop until end of file
         while next_line:
-            thread_time, target, next_line = merge_same_time_data(fp, next_line)
-            pred = model(thread_time)
-            loss = loss_fn(pred, target)
+            data_time, data_target, next_line = merge_same_time_data(fp, next_line,
+                num_locks, num_actions)
+
+            while cur_time < data_time:
+                pred = model(torch.Tensor([cur_time]))
+                loss = loss_fn(pred, nop_target)
+                print cur_time, loss.item()
+                loss.backward()
+                optimizer.step()
+                cur_time += 1
+                # raw_input()
+
+            pred = model(torch.Tensor([data_time]))
+            loss = loss_fn(pred, data_target)
+            print data_time, data_target, loss.item()
             loss.backward()
-            optim.step()
+            optimizer.step()
+            cur_time += 1
+            # raw_input()
+
+            if cur_time >= 32000:
+                return lstm
+
+    return lstm
 
 
 def get_model_dimensions(log_file):
@@ -109,7 +134,7 @@ def get_model_dimensions(log_file):
         while fp.read(1) != b'\n':
             fp.seek(-2, os.SEEK_CUR)
 
-        num_locks = fp.readline().decode()
+        num_locks = int(fp.readline().decode())
 
     return num_locks
 
@@ -119,7 +144,7 @@ def parse_args():
     parser.add_argument('--log-file', dest='log_file', type=str,
                         default=None, help="Filepath of log to build model of")
     parser.add_argument('--lr', dest='lr', type=float,
-                        default=5e-4, help="The learning rate.")
+                        default=0.1, help="The learning rate.")
 
     return parser.parse_args()
 
@@ -127,6 +152,7 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     log_file = args.log_file
+    lr = args.lr
     num_locks = get_model_dimensions(log_file)
 
     input_size = model_params["input_size"]
@@ -147,5 +173,5 @@ if __name__ == '__main__':
     #         bidirectional=False
     #     )
 
-    train(model, lr, log_file)
+    trained_model = train(model, log_file, lr)
 
