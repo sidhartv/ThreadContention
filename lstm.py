@@ -9,7 +9,7 @@ import numpy as np
 
 model_params = \
     {"input_size": 1,
-     "num_actions": 15,
+     "num_actions": 2,
      "hidden_size": 1,
      "num_layers": 1,
      "batch_size": 1
@@ -18,7 +18,7 @@ model_params = \
 # Here we define our model as a class
 class LSTM(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, batch_size, num_locks, num_actions=16,
+    def __init__(self, input_dim, hidden_dim, batch_size, num_locks, num_actions=15,
                     num_layers=2):
         super(LSTM, self).__init__()
         self.input_dim = input_dim
@@ -38,7 +38,7 @@ class LSTM(nn.Module):
 
     def init_hidden(self):
         # This is what we'll initialise our hidden state as
-        return (torch.zeros(self.num_layers, self.batch_size, self.hidden_dim),
+        self.hidden = (torch.zeros(self.num_layers, self.batch_size, self.hidden_dim),
                 torch.zeros(self.num_layers, self.batch_size, self.hidden_dim))
 
     def forward(self, inputs):
@@ -46,7 +46,7 @@ class LSTM(nn.Module):
         # shape of lstm_out: [input_size, batch_size, hidden_dim]
         # shape of self.hidden: (a, b), where a and b both 
         # have shape (num_layers, batch_size, hidden_dim).
-        lstm_out, self.hidden = self.lstm(inputs.view(len(inputs), self.batch_size, -1))
+        lstm_out, self.hidden = self.lstm(inputs.view(len(inputs), self.batch_size, -1), self.hidden)
         
         # Only take the output from the final timetep
         # Can pass on the entirety of lstm_out to the next layer if it is a seq2seq prediction
@@ -86,10 +86,10 @@ def merge_same_time_data(fp, first_line, num_locks, num_actions):
 
     # since we've already read the next line, we need to return it
     # so that next call to function can process it
-    return thread_time, torch.from_numpy(target).float(), next_line
+    return thread_time, torch.tensor(target, requires_grad=True).float(), next_line
 
 
-def train(lstm, log_file, lr=0.1):
+def train(lstm, log_file, lr=0.01):
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(lstm.parameters(), lr)
     cur_time = 1
@@ -109,7 +109,7 @@ def train(lstm, log_file, lr=0.1):
                 pred = model(torch.Tensor([cur_time]))
                 loss = loss_fn(pred, nop_target)
                 print cur_time, loss.item()
-                loss.backward()
+                loss.backward(retain_graph=True)
                 optimizer.step()
                 cur_time += 1
                 # raw_input()
@@ -117,7 +117,7 @@ def train(lstm, log_file, lr=0.1):
             pred = model(torch.Tensor([data_time]))
             loss = loss_fn(pred, data_target)
             print data_time, data_target, loss.item()
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
             cur_time += 1
             # raw_input()
@@ -163,6 +163,8 @@ if __name__ == '__main__':
 
     model = LSTM(input_size, hidden_size, batch_size=batch_size, 
         num_locks=num_locks, num_actions=num_actions, num_layers=num_layers)
+
+    model.init_hidden()
 
     # lstm = nn.LSTM(input_size=model_params["input_dim"], 
     #         hidden_size=output_size,

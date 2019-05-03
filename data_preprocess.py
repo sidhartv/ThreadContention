@@ -84,7 +84,7 @@ no_lock_id = 0
 next_object_id = 1
 object_ids = dict()
 
-interval_size_ns = 5000 # how to adjust and round the raw timestamps
+interval_size_ns = 100000 # how to adjust and round the raw timestamps
 
 def get_object_id(addr):
     global next_object_id
@@ -118,9 +118,9 @@ def parse_file(filepath, outpath):
                 # round to buckets of size interval_size_ms
                 thread_time_ns = thread_time_ns - (thread_time_ns % interval_size_ns)
                 thread_time_us = thread_time_ns/interval_size_ns
-                object_type = tokens[2]
-                object_id = get_object_id(tokens[3])
-                event_type = tokens[4]
+                object_type = tokens[3]
+                object_id = get_object_id(tokens[4])
+                event_type = tokens[5]
 
                 # only comment in if you want to add nops 
                 # insert_nops(out_fp, prev_time, thread_time_us)
@@ -149,8 +149,8 @@ def parse_traces(path, outpath):
         # exit()
 
 if __name__ == '__main__':
-    inpath = os.path.dirname(os.getcwd()) + "/tf-mnist-threads"
-    outpath = os.path.dirname(os.getcwd()) + "/tf-mnist-threads/processed"
+    inpath = os.path.dirname(os.getcwd()) + "/sysbench-trace"
+    outpath = os.path.dirname(os.getcwd()) + "/sysbench-trace/processed"
     parse_traces(inpath, outpath)
 
         
