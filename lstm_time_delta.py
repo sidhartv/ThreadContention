@@ -52,6 +52,13 @@ class LSTM(nn.Module):
 
         return linear_out.view(1)
 
+def repackage_hidden(h):
+    """Wraps hidden states in new Tensors, to detach them from their history."""
+    if isinstance(h, torch.Tensor):
+        return h.detach()
+    else:
+        return tuple(repackage_hidden(v) for v in h)
+
 def parse_line(line):
     tokens = line.strip().split(" ")
 
@@ -98,7 +105,7 @@ def parse_line(line):
 
 
 
-def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
+def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=150):
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(lstm.parameters(), lr)
 
@@ -126,7 +133,7 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
                 else:
                     # use delta between last two events to predict next delta
                     pred = lstm(torch.Tensor([old_delta]))
-                    lstm.lstm.hidden = lstm.lstm.hidden.detach()
+                    lstm.hidden = repackage_hidden(lstm.hidden)
                     #print type(pred)
 
                     # calculate real delta between current and prev events
@@ -147,7 +154,7 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
 
                 cur_time = thread_time
 
-        print('Epoch #' + str(epoch) + 'complete. Loss = ' + str(epoch_loss))
+        print('Epoch #' + str(epoch) + ' complete. Loss = ' + str(epoch_loss))
 
 
     return lstm
