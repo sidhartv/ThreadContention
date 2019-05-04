@@ -125,7 +125,8 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
                     #print old_delta
                 else:
                     # use delta between last two events to predict next delta
-                    pred = model(torch.Tensor([old_delta]))
+                    pred = lstm(torch.Tensor([old_delta]))
+                    lstm.lstm.hidden = lstm.lstm.hidden.detach()
                     #print type(pred)
 
                     # calculate real delta between current and prev events
