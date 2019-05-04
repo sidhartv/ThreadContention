@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 model_params = \
     {"input_size": 1,
-     "output_size": 1,
+     "output_size": 3,
      "hidden_size": 10,
      "num_layers": 1,
      "batch_size": 1
@@ -50,7 +50,7 @@ class LSTM(nn.Module):
         # Can pass on the entirety of lstm_out to the next layer if it is a seq2seq prediction
         linear_out = self.linear(lstm_out[-1].view(self.batch_size, -1))
 
-        return linear_out.view(1)
+        return linear_out.view(self.output_dim)
 
 def repackage_hidden(h):
     """Wraps hidden states in new Tensors, to detach them from their history."""
@@ -105,7 +105,7 @@ def parse_line(line):
 
 
 
-def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=150):
+def train(lstm, log_file, lr=0.01, epochs=150):
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(lstm.parameters(), lr)
 
@@ -116,41 +116,52 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=150):
 
     for epoch in range(epochs):
         epoch_loss = 0
-
         cur_time = 0
-        old_delta = 0
-        new_delta = 0
 
+        old_lock_id = -1
+        old_event_type = -1
+        old_delta = -1
+
+        new_lock_id = 0
+        new_event_type = 0
+        new_delta = 0
 
         for line in tqdm(lines):
             thread_time, line_lock_id, line_event_type = parse_line(line)
-            if lock_id == line_lock_id and event_type == line_event_type:
-                # we care about this event    
-                if old_delta == -1:
-                    # first time
-                    old_delta = thread_time
-                    #print old_delta
-                else:
-                    # use delta between last two events to predict next delta
-                    pred = lstm(torch.Tensor([old_delta]))
-                    lstm.hidden = repackage_hidden(lstm.hidden)
-                    #print type(pred)
+            # if lock_id == line_lock_id and event_type == line_event_type:
+            # we care about this event    
+            if old_delta == -1:
+                # first time
+                old_delta = thread_time
+                old_lock_id = line_lock_id
+                old_event_type = line_event_type
 
-                    # calculate real delta between current and prev events
-                    new_delta = thread_time - cur_time
-                    
-                    loss = loss_fn(pred, torch.Tensor([new_delta]))
-                    #print cur_time, thread_time, old_delta, new_delta, pred, loss.item()
+            else:
+                # t = torch.Tensor([old_delta, old_lock_id, old_event_type])
+                # print t.view(3, 1, 1).size()
 
-                    epoch_loss += loss.item()
+                # use delta between last two events to predict next delta
+                pred = lstm(torch.Tensor([old_delta, old_lock_id, old_event_type]))
+                lstm.hidden = repackage_hidden(lstm.hidden)
 
-                    # loss.backward(retain_graph=True)
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
+                # calculate real delta between current and prev events
+                new_lock_id = line_lock_id
+                new_event_type = line_event_type
+                new_delta = thread_time - cur_time
+                
+                loss = loss_fn(pred, torch.Tensor([new_delta, new_lock_id, new_event_type]))
+                #print cur_time, thread_time, old_delta, new_delta, pred, loss.item()
 
+                epoch_loss += loss.item()
 
-                    old_delta = new_delta
+                # loss.backward(retain_graph=True)
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+                old_lock_id = new_lock_id
+                old_event_type = new_event_type
+                old_delta = new_delta
 
                 cur_time = thread_time
 
@@ -180,7 +191,9 @@ def parse_args():
     parser.add_argument('--event_type', dest='event_type', type=int,
                         default=1, help="The event type to analyze and predict timing of")
     parser.add_argument('--lr', dest='lr', type=float,
-                        default=0.1, help="The learning rate")
+                        default=0.01, help="The learning rate")
+    parser.add_argument('--epochs', dest='epochs', type=float,
+                        default=150, help="Number of epochs")
 
     return parser.parse_args()
 
@@ -208,5 +221,5 @@ if __name__ == '__main__':
     # randomly initialize hidden weights
     model.init_hidden()
 
-    trained_model = train(model, log_file, lock_id, event_type, lr)
+    trained_model = train(model, log_file, lr)
 
