@@ -102,6 +102,11 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(lstm.parameters(), lr)
 
+    lines = []
+    with open(log_file, "r") as fp:
+        for line in fp:
+            lines.append(line)
+
     for epoch in range(epochs):
         epoch_loss = 0
 
@@ -109,38 +114,38 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
         old_delta = 0
         new_delta = 0
 
-        with open(log_file, "r") as fp:
-            for line in tqdm(fp):
-                thread_time, line_lock_id, line_event_type = parse_line(line)
-                if lock_id == line_lock_id and event_type == line_event_type:
-                    # we care about this event    
-                    if old_delta == -1:
-                        # first time
-                        old_delta = thread_time
-                        #print old_delta
-                    else:
-                        # use delta between last two events to predict next delta
-                        pred = model(torch.Tensor([old_delta]))
-                        #print type(pred)
 
-                        # calculate real delta between current and prev events
-                        new_delta = thread_time - cur_time
-                        
-                        loss = loss_fn(pred, torch.Tensor([new_delta]))
-                        #print cur_time, thread_time, old_delta, new_delta, pred, loss.item()
+        for line in tqdm(lines):
+            thread_time, line_lock_id, line_event_type = parse_line(line)
+            if lock_id == line_lock_id and event_type == line_event_type:
+                # we care about this event    
+                if old_delta == -1:
+                    # first time
+                    old_delta = thread_time
+                    #print old_delta
+                else:
+                    # use delta between last two events to predict next delta
+                    pred = model(torch.Tensor([old_delta]))
+                    #print type(pred)
 
-                        epoch_loss += loss.item()
+                    # calculate real delta between current and prev events
+                    new_delta = thread_time - cur_time
+                    
+                    loss = loss_fn(pred, torch.Tensor([new_delta]))
+                    #print cur_time, thread_time, old_delta, new_delta, pred, loss.item()
 
-                        # loss.backward(retain_graph=True)
-                        loss.backward(retain_graph=True)
-                        optimizer.step()
+                    epoch_loss += loss.item()
+
+                    # loss.backward(retain_graph=True)
+                    loss.backward(retain_graph=True)
+                    optimizer.step()
 
 
-                        old_delta = new_delta
+                    old_delta = new_delta
 
-                    cur_time = thread_time
+                cur_time = thread_time
 
-        print(epoch_loss)
+            print('Epoch #' + str(epoch) + 'complete. Loss = ' + str(epoch_loss))
 
 
     return lstm
