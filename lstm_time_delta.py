@@ -139,6 +139,7 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
                     # loss.backward(retain_graph=True)
                     loss.backward(retain_graph=True)
                     optimizer.step()
+                    optimizer.zero_grad()
 
 
                     old_delta = new_delta
