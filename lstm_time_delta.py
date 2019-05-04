@@ -154,7 +154,7 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=150):
 
                 cur_time = thread_time
 
-        print('Epoch #' + str(epoch) + ' complete. Loss = ' + str(epoch_loss))
+        print('Epoch #' + str(epoch) + ' complete. Loss = ' + str(epoch_loss / len(lines)))
 
 
     return lstm
