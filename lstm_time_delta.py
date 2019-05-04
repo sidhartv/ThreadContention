@@ -7,6 +7,8 @@ import os
 import argparse
 import numpy as np
 
+from tqdm import tqdm
+
 model_params = \
     {"input_size": 1,
      "output_size": 1,
@@ -108,7 +110,7 @@ def train(lstm, log_file, lock_id=1, event_type=1, lr=0.01, epochs=100):
         new_delta = 0
 
         with open(log_file, "r") as fp:
-            for line in fp:
+            for line in tqdm(fp):
                 thread_time, line_lock_id, line_event_type = parse_line(line)
                 if lock_id == line_lock_id and event_type == line_event_type:
                     # we care about this event    
