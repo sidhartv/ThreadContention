@@ -1,22 +1,21 @@
 import keras
 import numpy as np
+import argparse
 
 
-def construct_model():
-	input0 = keras.layers.Input(shape=(1,3))
+def construct_model(learning_rate):
+	input0 = keras.layers.Input(shape=(1,1))
 
-	lstm0 = keras.layers.LSTM(32, input_shape=(1,3), return_sequences=True)(input0)
+	lstm0 = keras.layers.LSTM(32, input_shape=(1,1), return_sequences=True)(input0)
 	lstm1 = keras.layers.LSTM(32)(lstm0)
+	dense1 = keras.layers.Dense(32)(lstm1)
 
-	fc_delta = keras.layers.Dense(1)(lstm1)
+	fc_delta = keras.layers.Dense(1)(dense1)
 
-	fc_event = keras.layers.Dense(2)(lstm1)
-	soft_event = keras.layers.Activation('softmax')(fc_event)
+	model = keras.models.Model(inputs=[input0], outputs=[fc_delta])
 
-	model = keras.models.Model(inputs=[input0], outputs=[fc_delta, soft_event])
-
-	opt = keras.optimizers.Adam(lr=0.05)
-	model.compile(loss=['mean_squared_error', 'categorical_crossentropy'], optimizer=opt)
+	opt = keras.optimizers.Adam(lr=learning_rate)
+	model.compile(loss=['mean_squared_error'], optimizer=opt)
 	return model
 
 def parse_line(line):
@@ -42,9 +41,7 @@ def parse_trace(trace_file, filter_lock_id, filter_event):
 			delta = thread_time - last_thread_time
 			last_thread_time = thread_time
 
-			rec = np.zeros(3)
-			rec[0] = delta
-			rec[event_type] = 1
+			rec = np.array(delta).reshape(1,1)
 
 			trace.append(rec)
 
@@ -54,12 +51,50 @@ def parse_trace(trace_file, filter_lock_id, filter_event):
 	return x, y
 
 
-model = construct_model()
-print("[INFO] Model constructed")
-x,y = parse_trace('../sysbench-trace/processed/thread_2513_p.log', 3, 2)
+def get_model_dimensions(log_file):
+    with open(log_file, "r") as fp:
+        fp.seek(-2, os.SEEK_END)
+        while fp.read(1) != b'\n':
+            fp.seek(-2, os.SEEK_CUR)
 
-x = x.reshape((x.shape[0], 1, x.shape[1]))
-y = y.reshape((y.shape[0], y.shape[1]))
+        num_locks = int(fp.readline().decode())
 
-print("[INFO] Trace parsed")
-model.fit(x, [y[:,0], y[:,1:3]], epochs=2000)
+    return num_locks
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--log-file', dest='log_file', type=str,
+                        default=None, help="Filepath of log to build model of")
+    parser.add_argument('--lock-id', dest='lock_id', type=int,
+                        default=1, help="The lock ID to analyze")
+    parser.add_argument('--event-type', dest='event_type', type=int,
+                        default=1, help="The event type to analyze and predict timing of")
+    parser.add_argument('--lr', dest='lr', type=float,
+                        default=0.01, help="The learning rate")
+    parser.add_argument('--epochs', dest='epochs', type=float,
+                        default=150, help="Number of epochs")
+
+    return parser.parse_args()
+
+def main():
+	args = parse_args()
+	log_file = args.log_file
+	lock_id = args.lock_id
+	event_type = args.event_type
+	lr = args.lr
+	epochs = args.epochs
+	model = construct_model(lr)
+	print("[INFO] Model constructed")
+	x,y = parse_trace(log_file, lock_id, event_type)
+
+	x = x.reshape((x.shape[0], 1, x.shape[1]))
+	y = y.reshape((y.shape[0], y.shape[1]))
+
+	print("[INFO] Trace parsed")
+	model.fit(x, y, epochs=epochs)
+
+	
+
+
+
+main()
