@@ -104,8 +104,8 @@ def parse_args():
     parser.add_argument('--trace-dir', dest='input_dir', type=str,
                         default=None, help="Filepath of log to build model of")
     parser.add_argument('--trace-file', dest='trace_file', type=str, default=None)
-    parser.add_argument('--lock-id', dest=lock_id, type=int, default=-1)
-    parser.add_argument('--event-id', dest=event_id, type=int, default=-1)
+    parser.add_argument('--lock-id', dest='lock_id', type=int, default=-1)
+    parser.add_argument('--event-id', dest='event_id', type=int, default=-1)
 
     parser.add_argument('--model-dir', dest='output_dir', type=str,
                         default=None, help="Filepath of log to build model of")
@@ -123,9 +123,9 @@ def main():
 	lr = args.lr
 	epochs = args.epochs
 	batch_size = args.batch_size
-	output_file_prefix = args.output_dir + '/' + file[:-6]
 	if args.trace_file != None:
-		train_single(trace_file, args.lock_id, args.event_id, batch_size, epochs, lr, output_file_prefix)
+		output_file_prefix = args.output_dir + '/' + args.trace_file[:-6]
+		train_single(args.trace_file, args.lock_id, args.event_id, batch_size, epochs, lr, output_file_prefix)
 		return
 
 	procs = []
@@ -150,10 +150,10 @@ def train_trace(trace_file, lr, batch_size, epochs, output_file_prefix):
 	combos = get_combos(trace_file)
 	procs = []
 	print('[INFO] Parsing ' + trace_file + ' with ' + str(len(combos)) + ' combos.')
-	for combo in (combos):
+	for combo in tqdm(combos):
 		(lock_id, event_id) = combo
 		combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
-		print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
+		#print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
 		if len(combo_x) == 0:
 			#print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
 			continue
