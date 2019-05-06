@@ -76,6 +76,8 @@ def parse_args():
                         default=0.01, help="The learning rate")
     parser.add_argument('--epochs', dest='epochs', type=int,
                         default=150, help="Number of epochs")
+    parser.add_argument('--batch-size', dest='batch_size', type=int,
+                        default=1, help="Batch size")
 
     return parser.parse_args()
 
@@ -88,14 +90,14 @@ def get_combos(trace_file):
 	return list(combos)
 
 
-def train(x, y, lr, epochs, lock_id, event_id, file_prefix):
-	print('[INFO] Started process for ' + file_prefix + ' (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
+def train(x, y, lr, batch_size, epochs, lock_id, event_id, file_prefix):
+	print('[INFO] Started process for ' + file_prefix + ' (lock ' + str(lock_id) + ', event ' + str(event_id) + '), ' + str(len(y)) + ' records')
 	model = construct_model(lr)
 
 	x = x.reshape((x.shape[0], 1, x.shape[1]))
 	y = y.reshape((y.shape[0], y.shape[1]))
 
-	hist = model.fit(x, y, epochs=epochs, verbose=0)
+	hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
 	filename = file_prefix + '_' + str(lock_id) + '_' + str(event_id) + '.h5'
 	model.save(filename)
 	print('[INFO] Saved model to ' + filename)
@@ -104,43 +106,40 @@ def main():
 	args = parse_args()
 	lr = args.lr
 	epochs = args.epochs
-
+	batch_size = args.batch_size
 	procs = []
 
 	files = os.listdir(args.input_dir)
 	output_dir = args.output_dir
 	print('[INFO] Parsing traces')
-	for file in tqdm(files):
+	for file in (files):
 		if file[-4:] != '.log':
 			continue
 		#print('[INFO] Training models for trace ' + file)
 		output_file_prefix = args.output_dir + '/' + file[:-6]
-		procs += train_trace(args.input_dir + '/' + file, lr, epochs, output_file_prefix)
+		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, output_file_prefix)
 
 
 	pool = mp.Pool()
 	pool.starmap(train, procs)
 
 
-def train_trace(trace_file, lr, epochs, output_file_prefix):
+def train_trace(trace_file, lr, batch_size, epochs, output_file_prefix):
 
 	combos = get_combos(trace_file)
 	procs = []
+	print('[INFO] Parsing ' + trace_file + ' with ' + str(len(combos)) + ' combos.')
 	for combo in (combos):
 		(lock_id, event_id) = combo
 		combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
-		#print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
+		print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
 		if len(combo_x) == 0:
 			#print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
 			continue
 
-		p = (combo_x, combo_y, lr, epochs, lock_id, event_id, output_file_prefix)
+		p = (combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, output_file_prefix)
 		procs.append(p)
 		
 	return procs
-
-	
-
-
 
 main()

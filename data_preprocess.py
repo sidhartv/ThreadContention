@@ -149,8 +149,8 @@ def parse_traces(path, outpath):
         # exit()
 
 if __name__ == '__main__':
-    inpath = os.path.dirname(os.getcwd()) + "/sysbench-trace"
-    outpath = os.path.dirname(os.getcwd()) + "/sysbench-trace/processed"
+    inpath = os.path.dirname(os.getcwd()) + "/multiverso_threads"
+    outpath = os.path.dirname(os.getcwd()) + "/multiverso_processed"
     parse_traces(inpath, outpath)
 
         
