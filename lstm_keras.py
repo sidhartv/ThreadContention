@@ -1,3 +1,4 @@
+import time
 import keras
 import numpy as np
 import argparse
@@ -49,7 +50,8 @@ def parse_trace(trace_file, filter_lock_id, filter_event):
 			rec = np.array(delta).reshape(1,1)
 
 			trace.append(rec)
-
+	if len(trace) < 100:
+		return [], []
 	x = np.array(trace[:-1])
 	y = np.array(trace[1:])
 
@@ -73,11 +75,14 @@ def get_combos(trace_file):
 	with open(trace_file, 'r') as fp:
 		for line in fp:
 			thread_time, lock_id, event_type = parse_line(line)
+			if event_type > 2:
+				continue
 			combos.add((lock_id, event_type))
 	return list(combos)
 
 
 def train(x, y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose=False):
+	start = time.time()
 	print('[INFO] Started process for ' + file_prefix + ' (lock ' + str(lock_id) + ', event ' + str(event_id) + '), ' + str(len(y)) + ' records')
 	model = construct_model(lr)
 
@@ -90,7 +95,8 @@ def train(x, y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose=
 		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
 	filename = file_prefix + '_' + str(lock_id) + '_' + str(event_id) + '.h5'
 	model.save(filename)
-	print('[INFO] Saved model to ' + filename)
+	end = time.time()
+	print('[INFO] Saved model to ' + filename + '. Took ' + str(end - start) + 's')
 
 def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, output_file_prefix):
 	combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
