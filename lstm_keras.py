@@ -1,10 +1,11 @@
 import keras
 import numpy as np
 import argparse
+import os
+import multiprocessing as mp
+from tqdm import tqdm
 
-import multiprocessing 
-
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 def construct_model(learning_rate):
 	input0 = keras.layers.Input(shape=(1,1))
 
@@ -65,7 +66,9 @@ def get_model_dimensions(log_file):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--log-file', dest='log_file', type=str,
+    parser.add_argument('--trace-dir', dest='input_dir', type=str,
+                        default=None, help="Filepath of log to build model of")
+    parser.add_argument('--model-dir', dest='output_dir', type=str,
                         default=None, help="Filepath of log to build model of")
     parser.add_argument('--lr', dest='lr', type=float,
                         default=0.01, help="The learning rate")
@@ -84,39 +87,48 @@ def get_combos(trace_file):
 
 
 def train(x, y, model, epochs, lock_id, event_id, file_prefix):
-	print('[INFO] Started process for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
+	#print('[INFO] Started process for ' + file_prefix + ' (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
 	x = x.reshape((x.shape[0], 1, x.shape[1]))
 	y = y.reshape((y.shape[0], y.shape[1]))
 
 	hist = model.fit(x, y, epochs=epochs, verbose=False)
 	filename = file_prefix + '_' + str(lock_id) + '_' + str(event_id) + '.h5'
 	model.save(filename)
-	print('[INFO] Saved model to ' + filename)
+	#print('[INFO] Saved model to ' + filename)
 
 def main():
 	args = parse_args()
-	trace_file = args.log_file
 	lr = args.lr
 	epochs = args.epochs
 
+	files = os.listdir(args.input_dir)
+	output_dir = args.output_dir
+	for file in tqdm(files):
+		if file[-4:] != '.log':
+			continue
+		#print('[INFO] Training models for trace ' + file)
+		output_file_prefix = args.output_dir + '/' + file[:-6]
+		train_trace(args.input_dir + '/' + file, lr, epochs, output_file_prefix)
+
+
+def train_trace(trace_file, lr, epochs, output_file_prefix):
+
 	combos = get_combos(trace_file)
 	processes = []
-	for combo in combos:
+	for combo in tqdm(combos):
 		(lock_id, event_id) = combo
 		combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
-		print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
+		#print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
 		if len(combo_x) == 0:
-			print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
+			#print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
 			continue
 
-		p = multiprocessing.Process(target=train, args=(combo_x, combo_y, construct_model(lr), epochs, lock_id, event_id, trace_file))
+		p = mp.Process(target=train(combo_x, combo_y, construct_model(lr), epochs, lock_id, event_id, output_file_prefix))
 		processes.append(p)
 		p.start()
 
 	for p in processes:
 		p.join()
-
-
 
 
 
