@@ -88,8 +88,10 @@ def get_combos(trace_file):
 	return list(combos)
 
 
-def train(x, y, model, epochs, lock_id, event_id, file_prefix):
+def train(x, y, lr, epochs, lock_id, event_id, file_prefix):
 	print('[INFO] Started process for ' + file_prefix + ' (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
+	model = construct_model(lr)
+
 	x = x.reshape((x.shape[0], 1, x.shape[1]))
 	y = y.reshape((y.shape[0], y.shape[1]))
 
@@ -103,6 +105,8 @@ def main():
 	lr = args.lr
 	epochs = args.epochs
 
+	procs = []
+
 	files = os.listdir(args.input_dir)
 	output_dir = args.output_dir
 	for file in (files):
@@ -110,13 +114,17 @@ def main():
 			continue
 		#print('[INFO] Training models for trace ' + file)
 		output_file_prefix = args.output_dir + '/' + file[:-6]
-		train_trace(args.input_dir + '/' + file, lr, epochs, output_file_prefix)
+		procs += train_trace(args.input_dir + '/' + file, lr, epochs, output_file_prefix)
+
+
+	pool = mp.Pool()
+	pool.starmap(train, procs)
 
 
 def train_trace(trace_file, lr, epochs, output_file_prefix):
 
 	combos = get_combos(trace_file)
-	processes = []
+	procs = []
 	for combo in (combos):
 		(lock_id, event_id) = combo
 		combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
@@ -125,12 +133,12 @@ def train_trace(trace_file, lr, epochs, output_file_prefix):
 			#print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
 			continue
 
-		p = mp.Process(target=train, args=(combo_x, combo_y, construct_model(lr), epochs, lock_id, event_id, output_file_prefix))
-		processes.append(p)
-		p.start()
+		p = (combo_x, combo_y, lr, epochs, lock_id, event_id, output_file_prefix)
+		procs.append(p)
+		
+	return procs
 
-	for p in processes:
-		p.join()
+	
 
 
 
