@@ -151,14 +151,49 @@ def main():
 	pool.starmap(train, procs)
 
 
+def get_combos_and_list(trace_file):
+	combo_lists = dict()
+	combos = set()
+
+	with open(trace_file, 'r') as fp:
+		for line in fp:
+			thread_time, lock_id, event_type = parse_line(line)
+			if event_type > 2:
+				continue
+			combos.add((lock_id, event_type))
+			if (lock_id, event_type) not in combo_lists:
+				combo_lists[(lock_id, event_type)] = [thread_time]
+			else:
+				combo_lists[(lock_id, event_type)].append(thread_time)
+
+	return list(combos), combo_lists
+
+def gen_x_y(combo_list):
+	trace = []
+	last_thread_time = 0
+	for t in combo_list:
+		trace.append(np.array(t - last_thread_time).reshape((1,1)))
+		last_thread_time = t
+
+	x = np.array(trace[:-1])
+	y = np.array(trace[1:])
+
+	return x, y
+
+
+
+
 def train_trace(trace_file, lr, batch_size, epochs, output_file_prefix):
 
-	combos = get_combos(trace_file)
+	combos, combo_lists = get_combos_and_list(trace_file)
 	procs = []
 	print('[INFO] Parsing ' + trace_file + ' with ' + str(len(combos)) + ' combos.')
 	for combo in tqdm(combos):
 		(lock_id, event_id) = combo
-		combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
+		combo_list = combo_lists[combo]
+		if len(combo_list) < 100:
+			continue
+		combo_x, combo_y = gen_x_y(combo_list)
 		#print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
 		if len(combo_x) == 0:
 			#print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
