@@ -2,6 +2,8 @@ import keras
 import numpy as np
 import argparse
 
+import multiprocessing 
+
 
 def construct_model(learning_rate):
 	input0 = keras.layers.Input(shape=(1,1))
@@ -65,10 +67,6 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--log-file', dest='log_file', type=str,
                         default=None, help="Filepath of log to build model of")
-    parser.add_argument('--lock-id', dest='lock_id', type=int,
-                        default=1, help="The lock ID to analyze")
-    parser.add_argument('--event-type', dest='event_type', type=int,
-                        default=1, help="The event type to analyze and predict timing of")
     parser.add_argument('--lr', dest='lr', type=float,
                         default=0.01, help="The learning rate")
     parser.add_argument('--epochs', dest='epochs', type=float,
@@ -76,24 +74,49 @@ def parse_args():
 
     return parser.parse_args()
 
-def main():
-	args = parse_args()
-	log_file = args.log_file
-	lock_id = args.lock_id
-	event_type = args.event_type
-	lr = args.lr
-	epochs = args.epochs
-	model = construct_model(lr)
-	print("[INFO] Model constructed")
-	x,y = parse_trace(log_file, lock_id, event_type)
+def get_combos(trace_file):
+	combos = set()
+	with open(trace_file, 'r') as fp:
+		for line in fp:
+			thread_time, lock_id, event_type = parse_line(line)
+			combos.add((lock_id, event_type))
+	return list(combos)
 
+
+def train(x, y, model, epochs, lock_id, event_id, file_prefix):
+	print('[INFO] Started process for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
 	x = x.reshape((x.shape[0], 1, x.shape[1]))
 	y = y.reshape((y.shape[0], y.shape[1]))
 
-	print("[INFO] Trace parsed")
-	model.fit(x, y, epochs=epochs)
+	hist = model.fit(x, y, epochs=epochs, verbose=False)
+	filename = file_prefix + '_' + str(lock_id) + '_' + str(event_id) + '.h5'
+	model.save(filename)
+	print('[INFO] Saved model to ' + filename)
 
-	
+def main():
+	args = parse_args()
+	trace_file = args.log_file
+	lr = args.lr
+	epochs = args.epochs
+
+	combos = get_combos(trace_file)
+	processes = []
+	for combo in combos:
+		(lock_id, event_id) = combo
+		combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
+		print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
+		if len(combo_x) == 0:
+			print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
+			continue
+
+		p = multiprocessing.Process(target=train, args=(combo_x, combo_y, construct_model(lr), epochs, lock_id, event_id, trace_file))
+		processes.append(p)
+		p.start()
+
+	for p in processes:
+		p.join()
+
+
 
 
 
