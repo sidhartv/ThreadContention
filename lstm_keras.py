@@ -109,7 +109,8 @@ def main():
 
 	files = os.listdir(args.input_dir)
 	output_dir = args.output_dir
-	for file in (files):
+	print('[INFO] Parsing traces')
+	for file in tqdm(files):
 		if file[-4:] != '.log':
 			continue
 		#print('[INFO] Training models for trace ' + file)
