@@ -70,7 +70,7 @@ def get_model_dimensions(log_file):
 
 def train(args):
 	start = time.time()
-	x, y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose = args
+	x, y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, file_prefix, verbose = args
 	print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(y)) + ' records')
 	model = construct_model(lr)
 
@@ -81,16 +81,23 @@ def train(args):
 		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=1)
 	else:
 		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
+
+	final_loss = hist.history['loss'][-1]
+	if final_loss > loss_threshold:
+		end = time.time()
+		print('[INFO] Loss for model ' + filename + ' too high. (' + str(final_loss) + '). Training took ' + str(end - start) + 's')
+		return
+
 	filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
 	model.save(filename)
 	end = time.time()
 	print('[INFO] Saved model to ' + filename + '. Took ' + str(end - start) + 's')
 
-def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, threshold, output_file_prefix):
+def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, threshold, loss_threshold, output_file_prefix):
 	combo_x, combo_y = parse_trace(trace_file, lock_id, event_id, threshold)
 	if len(combo_x) == 0:
 		return
-	train((combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, output_file_prefix, True))
+	train((combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, output_file_prefix, True))
 
 
 def parse_args():
@@ -100,7 +107,8 @@ def parse_args():
     parser.add_argument('--trace-file', dest='trace_file', type=str, default=None)
     parser.add_argument('--lock-id', dest='lock_id', type=str, default='0x00')
     parser.add_argument('--event-id', dest='event_id', type=int, default=-1)
-
+    parser.add_argument('--loss-threshold', dest='loss_threshold', type=float,
+                        default=1000000, help="Loss threshold")
     parser.add_argument('--model-dir', dest='output_dir', type=str,
                         default=None, help="Filepath of log to build model of")
     parser.add_argument('--lr', dest='lr', type=float,
@@ -120,9 +128,10 @@ def main():
 	epochs = args.epochs
 	batch_size = args.batch_size
 	threshold = args.threshold
+	loss_threshold = args.loss_threshold
 	if args.trace_file != None:
 		output_file_prefix = args.output_dir + '/' + args.trace_file[:-6]
-		train_single(args.trace_file, int(args.lock_id, 16), args.event_id, batch_size, epochs, lr, threshold, output_file_prefix)
+		train_single(args.trace_file, int(args.lock_id, 16), args.event_id, batch_size, epochs, lr, threshold, loss_threshold, output_file_prefix)
 		return
 
 	procs = []
@@ -135,7 +144,7 @@ def main():
 			continue
 		#print('[INFO] Training models for trace ' + file)
 		output_file_prefix = args.output_dir + '/' + file[:-6]
-		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, threshold, output_file_prefix, False)
+		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, threshold, loss_threshold, output_file_prefix, False)
 
 
 	pool = mp.Pool()
