@@ -81,8 +81,9 @@ def get_combos(trace_file):
 	return list(combos)
 
 
-def train(x, y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose=False):
+def train(args):
 	start = time.time()
+	x, y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose = args
 	print('[INFO] Started process for ' + file_prefix + ' (lock ' + str(lock_id) + ', event ' + str(event_id) + '), ' + str(len(y)) + ' records')
 	model = construct_model(lr)
 
@@ -144,11 +145,12 @@ def main():
 			continue
 		#print('[INFO] Training models for trace ' + file)
 		output_file_prefix = args.output_dir + '/' + file[:-6]
-		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, output_file_prefix)
+		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, output_file_prefix, False)
 
 
 	pool = mp.Pool()
-	pool.starmap(train, procs)
+	for _ in tqdm(pool.imap(train, procs), total=len(procs)):
+		pass
 
 
 def get_combos_and_list(trace_file):
