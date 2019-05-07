@@ -1,3 +1,4 @@
+
 # Format:
 
 # TID
@@ -79,6 +80,7 @@
 
 import os
 import glob
+import argparse 
 
 no_lock_id = 0
 next_object_id = 1
@@ -148,9 +150,17 @@ def parse_traces(path, outpath):
         parse_file(filename, outpath)
         # exit()
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input-dir', dest='input_dir', type=str,
+        default=None, help="Directory of mutrace logs")
+    parser.add_argument('--output-dir', dest='output_dir', type=str,
+        default=None, help="Directory to place processed logs into")
+
 if __name__ == '__main__':
-    inpath = os.path.dirname(os.getcwd()) + "/multiverso_threads"
-    outpath = os.path.dirname(os.getcwd()) + "/multiverso_processed"
+    args = parse_args()
+    inpath = args.input_dir
+    outpath = args.output_dir
     parse_traces(inpath, outpath)
 
         
