@@ -7,8 +7,9 @@ import multiprocessing as mp
 from tqdm import tqdm
 import tensorflow as tf
 import math
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 tf.logging.set_verbosity(tf.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 def construct_model(learning_rate):
@@ -73,7 +74,7 @@ def get_model_dimensions(log_file):
 def train(args):
 	start = time.time()
 	full_x, full_y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose = args
-	print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(full_y)) + ' records')
+	#print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(full_y)) + ' records')
 	model = construct_model(lr)
 
 	losses = []
@@ -94,12 +95,21 @@ def train(args):
 	err = [math.sqrt(l) for l in losses]
 	model_filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
 	plot_filename =  file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.png'
+	plt.figure()
+	plt.plot(range(batch_size, len(full_y), batch_size), err)
+	
+	avg = sum(err) / len(err)
+	plt.axhline(avg, color='k', linestyle='dashed')
+	_, max_ = plt.xlim()
+	plt.text(max_ - max_/10, avg + avg/10, 
+		'Mean: {:.2f}'.format(avg))
 
-	plt.plot(err)
 	plt.savefig(plot_filename)
-	model.save(filename)
+	plt.close()
+
+	model.save(model_filename)
 	end = time.time()
-	print('[INFO] Saved model to ' + model_filename + '. Took ' + str(end - start) + 's')
+	print('[INFO] Saved model to ' + model_filename + '. Took ' + str(end - start) + 's.')
 
 def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, threshold, output_file_prefix):
 	combo_x, combo_y = parse_trace(trace_file, lock_id, event_id, threshold)
