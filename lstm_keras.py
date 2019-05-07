@@ -6,6 +6,8 @@ import os
 import multiprocessing as mp
 from tqdm import tqdm
 import tensorflow as tf
+import math
+import matplotlib.pyplot as plt
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -70,18 +72,32 @@ def get_model_dimensions(log_file):
 
 def train(args):
 	start = time.time()
-	x, y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, file_prefix, verbose = args
-	print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(y)) + ' records')
+	full_x, full_y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, file_prefix, verbose = args
+	print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(full_y)) + ' records')
 	model = construct_model(lr)
 
-	x = x.reshape((x.shape[0], 1, x.shape[1]))
-	y = y.reshape((y.shape[0], y.shape[1]))
+	losses = []
+	for i in range(3,len(full_y), 3):
 
-	if verbose:
-		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=1)
-	else:
-		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
+		x = full_x[i-3:i]
+		y = full_y[i-3:i]
+		x = x.reshape((x.shape[0], 1, x.shape[1]))
+		y = y.reshape((y.shape[0], y.shape[1]))
 
+		losses.append(model.evaluate(x, y))
+
+		if verbose:
+			hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
+		else:
+			hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
+
+		#print(model.evaluate(full_x.reshape((full_x.shape[0], 1, full_x.shape[1])), full_y.reshape((full_y.shape[0], full_y.shape[1]))))
+
+		#print(hist.history['loss'][-1])
+
+	err = [math.sqrt(l) for l in losses]
+	plt.plot(err)
+	plt.show()
 	filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
 	final_loss = hist.history['loss'][-1]
 	if final_loss > loss_threshold:
@@ -97,13 +113,8 @@ def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, threshol
 	combo_x, combo_y = parse_trace(trace_file, lock_id, event_id, threshold)
 	if len(combo_x) == 0:
 		return
-	for i in range(2,len(combo_y)):
-		subset_x = combo_x[:i]
-		subset_y = combo_y[:i]
 
-		train((subset_x, subset_y, lr, batch_size, 2, lock_id, event_id, loss_threshold, output_file_prefix, True))
-
-	#train((combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, output_file_prefix, True))
+	train((combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, output_file_prefix, True))
 
 
 def parse_args():
