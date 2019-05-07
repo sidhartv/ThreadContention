@@ -97,7 +97,13 @@ def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, threshol
 	combo_x, combo_y = parse_trace(trace_file, lock_id, event_id, threshold)
 	if len(combo_x) == 0:
 		return
-	train((combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, output_file_prefix, True))
+	for i in range(2,len(combo_y)):
+		subset_x = combo_x[:i]
+		subset_y = combo_y[:i]
+
+		train((subset_x, subset_y, lr, batch_size, 2, lock_id, event_id, loss_threshold, output_file_prefix, True))
+
+	#train((combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, output_file_prefix, True))
 
 
 def parse_args():
@@ -182,9 +188,6 @@ def gen_x_y(combo_list):
 	y = np.array(trace[1:])
 
 	return x, y
-
-
-
 
 def train_trace(trace_file, lr, batch_size, epochs, threshold, output_file_prefix):
 
