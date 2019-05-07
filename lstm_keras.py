@@ -82,13 +82,13 @@ def train(args):
 	else:
 		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
 
+	filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
 	final_loss = hist.history['loss'][-1]
 	if final_loss > loss_threshold:
 		end = time.time()
 		print('[INFO] Loss for model ' + filename + ' too high. (' + str(final_loss) + '). Training took ' + str(end - start) + 's')
 		return
 
-	filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
 	model.save(filename)
 	end = time.time()
 	print('[INFO] Saved model to ' + filename + '. Took ' + str(end - start) + 's')
@@ -144,7 +144,7 @@ def main():
 			continue
 		#print('[INFO] Training models for trace ' + file)
 		output_file_prefix = args.output_dir + '/' + file[:-6]
-		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, threshold, loss_threshold, output_file_prefix, False)
+		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, threshold, loss_threshold, output_file_prefix)
 
 
 	pool = mp.Pool()
@@ -186,7 +186,7 @@ def gen_x_y(combo_list):
 
 
 
-def train_trace(trace_file, lr, batch_size, epochs, threshold, output_file_prefix):
+def train_trace(trace_file, lr, batch_size, epochs, threshold, loss_threshold, output_file_prefix):
 
 	combos, combo_lists = get_combos_and_list(trace_file)
 	procs = []
@@ -202,7 +202,7 @@ def train_trace(trace_file, lr, batch_size, epochs, threshold, output_file_prefi
 			#print('[INFO] Trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ') does not have enough samples')
 			continue
 
-		p = (combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, output_file_prefix)
+		p = (combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, loss_threshold, output_file_prefix, False)
 		procs.append(p)
 		
 	return procs
