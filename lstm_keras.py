@@ -76,10 +76,10 @@ def train(args):
 	full_x, full_y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose = args
 	#print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(full_y)) + ' records')
 	model = construct_model(lr)
-
+	sample_num = []
 	losses = []
 	for i in range(batch_size,len(full_y), batch_size):
-
+		sample_num.append(i)
 		x = full_x[i-batch_size:i]
 		y = full_y[i-batch_size:i]
 		x = x.reshape((x.shape[0], 1, x.shape[1]))
@@ -93,20 +93,14 @@ def train(args):
 			hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
 
 	err = [math.sqrt(l) for l in losses]
-	model_filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
-	plot_filename =  file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.png'
-	plt.figure()
-	plt.plot(range(batch_size, len(full_y), batch_size), err)
+	err = np.array(err)
+	sample_num = np.array(sample_num)
+
 	
-	avg = sum(err) / len(err)
-	plt.axhline(avg, color='k', linestyle='dashed')
-	_, max_ = plt.xlim()
-	plt.text(max_ - max_/10, avg + avg/10, 
-		'Mean: {:.2f}'.format(avg))
+	err_filename =  file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.npz'
+	np.savez(err_filename, err=err, sample_num=sample_num)
 
-	plt.savefig(plot_filename)
-	plt.close()
-
+	model_filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
 	model.save(model_filename)
 	end = time.time()
 	print('[INFO] Saved model to ' + model_filename + '. Took ' + str(end - start) + 's.')
