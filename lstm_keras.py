@@ -84,7 +84,7 @@ def train(args):
 		x = x.reshape((x.shape[0], 1, x.shape[1]))
 		y = y.reshape((y.shape[0], y.shape[1]))
 
-		losses.append(model.evaluate(x, y))
+		losses.append(model.evaluate(x, y, verbose=0))
 
 		if verbose:
 			hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
