@@ -121,21 +121,22 @@ def parse_file(filepath, outpath):
                 thread_time_ns = thread_time_ns - (thread_time_ns % interval_size_ns)
                 thread_time_us = thread_time_ns/interval_size_ns
                 object_type = tokens[3]
+		object_addr = tokens[4]
                 object_id = get_object_id(tokens[4])
                 event_type = tokens[5]
 
                 # only comment in if you want to add nops 
                 # insert_nops(out_fp, prev_time, thread_time_us)
 
-                outline = "%d %s %d %s\n" % (thread_time_us, object_type, 
-                    object_id, event_type)
+                outline = "%d %s %s %s\n" % (thread_time_us, object_type, 
+                    object_addr, event_type)
                 # print(outline)
                 out_fp.write(outline) 
 
                 prev_time = thread_time_us
 
             # record number of locks in thread log
-            out_fp.write(str(len(object_ids)))
+            #out_fp.write(str(len(object_ids)))
 
 
 def parse_traces(path, outpath):
@@ -156,6 +157,8 @@ def parse_args():
         default=None, help="Directory of mutrace logs")
     parser.add_argument('--output-dir', dest='output_dir', type=str,
         default=None, help="Directory to place processed logs into")
+
+    return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_args()

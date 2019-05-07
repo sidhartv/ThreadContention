@@ -31,12 +31,12 @@ def parse_line(line):
         return -1, -1, -1
 
     thread_time = int(tokens[0])
-    lock_id = int(tokens[2])
+    lock_id = int(tokens[2], 16)
     event_type = int(tokens[3])
 
     return thread_time, lock_id, event_type
 
-def parse_trace(trace_file, filter_lock_id, filter_event):
+def parse_trace(trace_file, filter_lock_id, filter_event, threshold):
 	trace = []
 	last_thread_time = 0
 	with open(trace_file, 'r') as fp:
@@ -50,7 +50,7 @@ def parse_trace(trace_file, filter_lock_id, filter_event):
 			rec = np.array(delta).reshape(1,1)
 
 			trace.append(rec)
-	if len(trace) < 100:
+	if len(trace) < threshold:
 		return [], []
 	x = np.array(trace[:-1])
 	y = np.array(trace[1:])
@@ -68,23 +68,10 @@ def get_model_dimensions(log_file):
 
     return num_locks
 
-
-
-def get_combos(trace_file):
-	combos = set()
-	with open(trace_file, 'r') as fp:
-		for line in fp:
-			thread_time, lock_id, event_type = parse_line(line)
-			if event_type > 2:
-				continue
-			combos.add((lock_id, event_type))
-	return list(combos)
-
-
 def train(args):
 	start = time.time()
 	x, y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose = args
-	print('[INFO] Started process for ' + file_prefix + ' (lock ' + str(lock_id) + ', event ' + str(event_id) + '), ' + str(len(y)) + ' records')
+	print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(y)) + ' records')
 	model = construct_model(lr)
 
 	x = x.reshape((x.shape[0], 1, x.shape[1]))
@@ -94,16 +81,16 @@ def train(args):
 		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=1)
 	else:
 		hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
-	filename = file_prefix + '_' + str(lock_id) + '_' + str(event_id) + '.h5'
+	filename = file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.h5'
 	model.save(filename)
 	end = time.time()
 	print('[INFO] Saved model to ' + filename + '. Took ' + str(end - start) + 's')
 
-def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, output_file_prefix):
-	combo_x, combo_y = parse_trace(trace_file, lock_id, event_id)
+def train_single(trace_file, lock_id, event_id, batch_size, epochs, lr, threshold, output_file_prefix):
+	combo_x, combo_y = parse_trace(trace_file, lock_id, event_id, threshold)
 	if len(combo_x) == 0:
 		return
-	train(combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, output_file_prefix, verbose=True)
+	train((combo_x, combo_y, lr, batch_size, epochs, lock_id, event_id, output_file_prefix, True))
 
 
 def parse_args():
@@ -111,7 +98,7 @@ def parse_args():
     parser.add_argument('--trace-dir', dest='input_dir', type=str,
                         default=None, help="Filepath of log to build model of")
     parser.add_argument('--trace-file', dest='trace_file', type=str, default=None)
-    parser.add_argument('--lock-id', dest='lock_id', type=int, default=-1)
+    parser.add_argument('--lock-id', dest='lock_id', type=str, default='0x00')
     parser.add_argument('--event-id', dest='event_id', type=int, default=-1)
 
     parser.add_argument('--model-dir', dest='output_dir', type=str,
@@ -119,9 +106,11 @@ def parse_args():
     parser.add_argument('--lr', dest='lr', type=float,
                         default=0.01, help="The learning rate")
     parser.add_argument('--epochs', dest='epochs', type=int,
-                        default=150, help="Number of epochs")
+                        default=50, help="Number of epochs")
     parser.add_argument('--batch-size', dest='batch_size', type=int,
                         default=1, help="Batch size")
+    parser.add_argument('--threshold', dest='threshold', type=int,
+                        default=1, help="Threshold")
 
     return parser.parse_args()
 
@@ -130,9 +119,10 @@ def main():
 	lr = args.lr
 	epochs = args.epochs
 	batch_size = args.batch_size
+	threshold = args.threshold
 	if args.trace_file != None:
 		output_file_prefix = args.output_dir + '/' + args.trace_file[:-6]
-		train_single(args.trace_file, args.lock_id, args.event_id, batch_size, epochs, lr, output_file_prefix)
+		train_single(args.trace_file, int(args.lock_id, 16), args.event_id, batch_size, epochs, lr, threshold, output_file_prefix)
 		return
 
 	procs = []
@@ -145,7 +135,7 @@ def main():
 			continue
 		#print('[INFO] Training models for trace ' + file)
 		output_file_prefix = args.output_dir + '/' + file[:-6]
-		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, output_file_prefix, False)
+		procs += train_trace(args.input_dir + '/' + file, lr, batch_size, epochs, threshold, output_file_prefix, False)
 
 
 	pool = mp.Pool()
@@ -160,8 +150,10 @@ def get_combos_and_list(trace_file):
 	with open(trace_file, 'r') as fp:
 		for line in fp:
 			thread_time, lock_id, event_type = parse_line(line)
-			if event_type > 2:
+			if event_type > 4:
 				continue
+			if event_type == 3 or event_type == 4:
+				event_type = 1
 			combos.add((lock_id, event_type))
 			if (lock_id, event_type) not in combo_lists:
 				combo_lists[(lock_id, event_type)] = [thread_time]
@@ -185,7 +177,7 @@ def gen_x_y(combo_list):
 
 
 
-def train_trace(trace_file, lr, batch_size, epochs, output_file_prefix):
+def train_trace(trace_file, lr, batch_size, epochs, threshold, output_file_prefix):
 
 	combos, combo_lists = get_combos_and_list(trace_file)
 	procs = []
@@ -193,7 +185,7 @@ def train_trace(trace_file, lr, batch_size, epochs, output_file_prefix):
 	for combo in tqdm(combos):
 		(lock_id, event_id) = combo
 		combo_list = combo_lists[combo]
-		if len(combo_list) < 100:
+		if len(combo_list) < threshold:
 			continue
 		combo_x, combo_y = gen_x_y(combo_list)
 		#print('[INFO] Parsed trace for (lock ' + str(lock_id) + ', event ' + str(event_id) + ')')
