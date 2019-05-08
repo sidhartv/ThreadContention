@@ -93,8 +93,10 @@ def train(args):
 			hist = model.fit(x, y, epochs=epochs, batch_size=batch_size, verbose=0)
 
 	err = [math.sqrt(l) for l in losses]
+	err.append(np.median(full_y))
 	err = np.array(err)
 	sample_num = np.array(sample_num)
+
 
 	
 	err_filename =  file_prefix + '_' + hex(lock_id) + '_' + str(event_id) + '.npz'
