@@ -1,4 +1,5 @@
 import numpy as np
+from sys import argv
 
 def parse_line(line):
     tokens = line.strip().split(" ")
@@ -12,7 +13,7 @@ def parse_line(line):
 
     return thread_time, lock_id, event_type
 
-def parse_trace(trace_file, filter_lock_id, filter_event, threshold):
+def parse_trace(trace_file, filter_lock_id, filter_event):
 	trace = []
 	last_thread_time = 0
 	with open(trace_file, 'r') as fp:
@@ -26,8 +27,14 @@ def parse_trace(trace_file, filter_lock_id, filter_event, threshold):
 			rec = np.array(delta).reshape(1,1)
 
 			trace.append(rec)
-	if len(trace) < threshold:
-		return [], []
+
 	x = np.array(trace[:-1])
 
 	return np.median(x)
+
+
+file = argv[1]
+lock = int(argv[2], 16)
+event = int(argv[3])
+
+print(parse_trace(file, lock, event))
