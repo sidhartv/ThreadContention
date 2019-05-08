@@ -74,7 +74,7 @@ def get_model_dimensions(log_file):
 def train(args):
 	start = time.time()
 	full_x, full_y, lr, batch_size, epochs, lock_id, event_id, file_prefix, verbose = args
-	#print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(full_y)) + ' records')
+	print('[INFO] Started process for ' + file_prefix + ' (lock ' + hex(lock_id) + ', event ' + str(event_id) + '), ' + str(len(full_y)) + ' records')
 	model = construct_model(lr)
 	sample_num = []
 	losses = []
